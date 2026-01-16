@@ -2,45 +2,36 @@
 import PackageDescription
 
 let package = Package(
-    name: "OmniversalEngine",
+    name: "OmniCore",
     platforms: [
-        .macOS(.v14),
-        .iOS(.v17)
+        .iOS(.v17),
+        .macOS(.v14)
     ],
     products: [
-        .executable(name: "OmniversalApp", targets: ["OmniversalApp"]),
-        .library(name: "OmniGeometry", type: .dynamic, targets: ["OmniGeometry"]),
-        .library(name: "OmniStochastic", type: .dynamic, targets: ["OmniStochastic"]),
-        .library(name: "OmniCoordinator", type: .dynamic, targets: ["OmniCoordinator"]),
+        .library(
+            name: "OmniCore",
+            targets: ["OmniCore"]),
     ],
     targets: [
         .target(
-            name: "OmniGeometry",
+            name: "OmniCore",
             dependencies: [],
-            resources: [.process("Shaders")]
-        ),
-        .target(
-            name: "OmniStochastic",
-            dependencies: [],
-            resources: [.process("Kernels")]
-        ),
-        .target(
-            name: "OmniCoordinator",
-            dependencies: ["OmniGeometry", "OmniStochastic"]
-        ),
-        .executableTarget(
-            name: "OmniversalApp",
-            dependencies: ["OmniCoordinator"]
-        ),
-        
-        // Test Targets
-        .testTarget(
-            name: "MemoryTests",
-            dependencies: ["OmniCoordinator"]
+            path: "OmniCore",
+            exclude: ["Shaders", "Tests"],
+            sources: ["Sources"],
+            resources: [
+                .process("Resources/OmniShaders.metallib")
+            ],
+            publicHeadersPath: "Include",
+            cSettings: [
+                .headerSearchPath("Include")
+            ]
         ),
         .testTarget(
-            name: "PipelineTests",
-            dependencies: ["OmniCoordinator", "OmniGeometry", "OmniStochastic"]
-        )
+            name: "OmniCoreTests",
+            dependencies: ["OmniCore"],
+            path: "OmniCore/Tests",
+            sources: ["OmniCoreTests"]
+        ),
     ]
 )
