@@ -11,21 +11,40 @@ let package = Package(
         .library(
             name: "OmniCore",
             targets: ["OmniCore"]),
+        .library(
+            name: "OmniUI",
+            targets: ["OmniUI"]),
+        .library(
+            name: "OmniWidgetExtension",
+            targets: ["OmniWidgetExtension"]),
     ],
     targets: [
         .target(
+            name: "OmniCoreTypes",
+            path: "OmniCore/Include",
+            publicHeadersPath: "."
+        ),
+        .target(
             name: "OmniCore",
-            dependencies: [],
+            dependencies: ["OmniCoreTypes"],
             path: "OmniCore",
-            exclude: ["Shaders", "Tests"],
+            exclude: ["Shaders", "Tests", "Include"],
             sources: ["Sources"],
             resources: [
                 .process("Resources/OmniShaders.metallib")
-            ],
-            publicHeadersPath: "Include",
-            cSettings: [
-                .headerSearchPath("Include")
             ]
+        ),
+        .target(
+            name: "OmniUI",
+            dependencies: ["OmniCore"],
+            path: "OmniUI",
+            sources: ["Sources"]
+        ),
+        .target(
+            name: "OmniWidgetExtension",
+            dependencies: ["OmniCore", "OmniUI"],
+            path: "OmniWidget",
+            sources: ["Sources"]
         ),
         .testTarget(
             name: "OmniCoreTests",

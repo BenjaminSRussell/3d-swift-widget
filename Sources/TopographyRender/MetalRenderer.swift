@@ -22,14 +22,17 @@ public class MetalRenderer: NSObject, MTKViewDelegate {
     public init?(metalKitView: MTKView) {
         super.init()
         
-        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
-        self.device = device
-        self.commandQueue = device.makeCommandQueue()
+        let context = MetalContext.shared
+        self.device = context.device
+        self.commandQueue = context.commandQueue
         
         metalKitView.device = device
         metalKitView.colorPixelFormat = .bgra8Unorm
         metalKitView.depthStencilPixelFormat = .depth32Float
         metalKitView.delegate = self
+        
+        // Target 120 FPS for ProMotion displays
+        metalKitView.preferredFramesPerSecond = 120
         
         buildPipeline()
         buildDepthState()
@@ -142,7 +145,7 @@ public class MetalRenderer: NSObject, MTKViewDelegate {
     public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
     
     public func draw(in view: MTKView) {
-        guard let commandBuffer = commandQueue.makeCommandBuffer(),
+        guard let commandBuffer = MetalContext.shared.makeCommandBuffer(),
               let descriptor = view.currentRenderPassDescriptor,
               let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor),
               let pipelineState = pipelineState,

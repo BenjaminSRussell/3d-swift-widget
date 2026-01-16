@@ -1,7 +1,9 @@
 #pragma once
 
 #ifdef __METAL_VERSION__
-#define NS_ENUM(_type, _name) enum _name : _type _name; enum _name : _type
+#define NS_ENUM(_type, _name)                                                  \
+  enum _name : _type _name;                                                    \
+  enum _name : _type
 #define NS_INTEGER NSInteger
 typedef metal::int32_t NSInteger;
 #else
@@ -10,7 +12,8 @@ typedef metal::int32_t NSInteger;
 
 #include <simd/simd.h>
 
-// Enforce 16-byte alignment for all shared structures to match Metal std140/std430
+// Enforce 16-byte alignment for all shared structures to match Metal
+// std140/std430
 #define ALIGNED_16 __attribute__((aligned(16)))
 
 // MARK: - Common Types
@@ -20,35 +23,98 @@ typedef vector_float3 float3;
 typedef vector_float4 float4;
 typedef matrix_float4x4 float4x4;
 
-// MARK: - Shader Uniforms
-
-struct FrameUniforms {
-    float4x4 viewMatrix;
-    float4x4 projectionMatrix;
-    float4x4 viewProjectionMatrix;
-    float4x4 inverseViewProjectionMatrix;
-    
-    float3 cameraPosition;
-    float  time; // Total time since start
-    
-    float2 resolution; // Screen resolution in pixels
-    float  deltaTime;  // Time since last frame
-    uint   frameCount; // Total frames rendered
-} ALIGNED_16;
-
-struct ModelUniforms {
-    float4x4 modelMatrix;
-    float4x4 normalMatrix; // Inverse transpose of model matrix
-} ALIGNED_16;
-
 // MARK: - Particle System
 
-struct Particle {
-    float3 position;
-    float  mass;
-    
-    float3 velocity;
-    float  radius;
-    
-    float4 color; // RGBA
-} ALIGNED_16;
+typedef struct ALIGNED_16 {
+  float3 position;
+  float3 velocity;
+  float4 dataAttributes;
+  float topologicalSignificance;
+  uint clusterID;
+  float persistence; // From TDA
+} Particle;
+
+// Phase 10.2: PBR Material & Lighting
+typedef struct ALIGNED_16 {
+  float3 baseColor;
+  float roughness;
+  float metallic;
+  float ambientOcclusion;
+  float emissive;
+
+  // Phase 11.2: Thin Film Iridescence
+  float filmThickness; // in nanometers (e.g., 200-800)
+  float filmIOR;       // Refractive index of the film
+
+  // Phase 12.1: Refraction & Dispersion
+  float refractionIndex;  // Base IOR
+  float dispersionAmount; // Strength of chromatic aberration
+} PBRMaterial;
+
+typedef struct ALIGNED_16 {
+  float3 position;
+  float3 color;
+  float intensity;
+  float radius;
+} PointLight;
+
+// MARK: - Shader Uniforms
+
+typedef struct ALIGNED_16 {
+  float4x4 viewMatrix;
+  float4x4 projectionMatrix;
+  float4x4 viewProjectionMatrix;
+  float4x4 inverseViewProjectionMatrix;
+
+  float3 cameraPosition;
+  float time; // Total time since start
+
+  float2 resolution; // Screen resolution in pixels
+  float deltaTime;   // Time since last frame
+  uint frameCount;   // Total frames rendered
+
+  PointLight lights[4];
+  uint lightCount;
+} FrameUniforms;
+
+// Phase 5.3: Meshlet Descriptors
+typedef struct ALIGNED_16 {
+  uint vertexOffset;
+  uint triangleOffset;
+  uint vertexCount;
+  uint triangleCount;
+  float4 boundingCone; // xyz: normal, w: angle cut-off
+} MeshletDescriptor;
+
+// Phase 8.1: Physics Constraints
+typedef struct ALIGNED_16 {
+  uint p1;
+  uint p2;
+  float restLength;
+  float stiffness;
+} SpringConstraint;
+
+// Phase 6.1: Bindless Resource Structures
+struct MaterialResources {
+  uint baseColorTextureIndex;
+  uint normalTextureIndex;
+  float roughness;
+  float metalness;
+};
+
+#ifdef __METAL_VERSION__
+// Bindless Texture Table (Tier 2 Argument Buffers)
+struct GlobalResources {
+  texture2d<float> textures[1024] [[id(0)]];
+  sampler samplers[16] [[id(1024)]];
+};
+#endif
+
+#ifdef __METAL_VERSION__
+// Phase 4.8: Compressed Particle Layout
+// Uses 16-bit floats to reduce memory footprint.
+struct HalfParticle {
+  half3 position;
+  half3 velocity;
+};
+#endif
