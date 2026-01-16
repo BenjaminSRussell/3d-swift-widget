@@ -9,11 +9,9 @@ struct HDTEWidgetView: View {
     var body: some View {
         ZStack {
             // Rendered snapshot
-            if let uiImage = UIImage(cgImage: entry.snapshot) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            }
+            Image(decorative: entry.snapshot, scale: 1.0, orientation: .up)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
             
             // Overlay UI
             VStack {
@@ -32,9 +30,9 @@ struct HDTEWidgetView: View {
                     
                     Spacer()
                     
-                    // Status indicator
+                    // Status indicator (Visual style indicator)
                     Circle()
-                        .fill(Color.green)
+                        .fill(entry.configuration.visualStyle == .volumetric ? Color.green : Color.orange)
                         .frame(width: 6, height: 6)
                 }
                 .padding(8)
@@ -68,10 +66,15 @@ struct HDTEWidget: Widget {
 #Preview(as: .systemMedium) {
     HDTEWidget()
 } timeline: {
-    let device = MTLCreateSystemDefaultDevice()!
+    // Manually create an entry for preview without needing a context
     let provider = HDTEProvider()
+    let config = ConfigureHDTEIntent()
     
-    // Generate preview snapshot
-    let snapshot = provider.placeholder(in: TimelineProviderContext())
-    HDTEEntry(date: Date(), snapshot: snapshot.snapshot, configuration: HDTEConfiguration())
+    // Generate snapshot directly using the internal helper
+    let snapshot = provider.generateSnapshot(
+        config: config,
+        size: CGSize(width: 300, height: 150)
+    )
+    
+    HDTEEntry(date: Date(), snapshot: snapshot, configuration: config)
 }

@@ -1,6 +1,7 @@
 import Metal
 import MetalKit
 import MetalPerformanceShaders
+import OmniGeometry
 
 /// Hyper-Dimensional Topography Engine Pipeline
 /// Orchestrates: Tucker Decomposition → Bayesian Sampling → Volumetric Rendering
@@ -12,24 +13,37 @@ public class HDTEPipeline {
     // Pipeline states
     private var tuckerPipeline: MTLComputePipelineState!
     private var bayesianPipeline: MTLComputePipelineState!
-    private var volumetricPipeline: MTLRenderPipelineState!
+    private var terrainMeshPipeline: MTLRenderPipelineState! // Terrain Geometry
+    private var bridgeMeshPipeline: MTLRenderPipelineState!  // Pedagogical Bridges
+    private var volumetricPipeline: MTLRenderPipelineState!  // Fog Overlay
     
     // Shared resources
     private var inputBuffer: MTLBuffer! // 10D data (shared mode for zero-copy)
     private var positionBuffer: MTLBuffer! // 3D positions (aliased on heap)
     private var varianceTexture: MTLTexture! // Uncertainty map (aliased on heap)
     
-    public init(device: MTLDevice) {
+    public init(device: MTLDevice) throws {
         self.device = device
-        self.commandQueue = device.makeCommandQueue()!
+        guard let queue = device.makeCommandQueue() else {
+            throw PipelineError.commandQueueCreationFailed
+        }
+        self.commandQueue = queue
         self.memoryManager = MemoryManager(device: device)
         
-        setupPipelines()
+        try setupPipelines()
     }
     
-    private func setupPipelines() {
-        guard let library = device.makeDefaultLibrary() else {
-            fatalError("Failed to load Metal library")
+    private func setupPipelines() throws {
+        // Load library from OmniGeometry bundle (where shaders are compiled)
+        let library: MTLLibrary
+        do {
+            library = try device.makeDefaultLibrary(bundle: OmniGeometry.bundle)
+        } catch {
+            // Fallback for non-bundle environments (e.g. monolithic app)
+            guard let defaultLib = device.makeDefaultLibrary() else {
+                 throw PipelineError.libraryLoadingFailed
+            }
+            library = defaultLib
         }
         
         // Tucker decomposition
@@ -42,9 +56,38 @@ public class HDTEPipeline {
             bayesianPipeline = try? device.makeComputePipelineState(function: bayesianFunc)
         }
         
-        // Volumetric rendering
+        // Terrain Mesh Pipeline (Mesh + Object)
+        let meshDescriptor = MTLMeshRenderPipelineDescriptor()
+        meshDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        meshDescriptor.depthAttachmentPixelFormat = .depth32Float
+        
+        if let meshFunc = library.makeFunction(name: "terrain_mesh"),
+           let objectFunc = library.makeFunction(name: "terrain_object"),
+           let fragFunc = library.makeFunction(name: "ridgeline_fragment") { // Using ridgeline fragment for geometry
+            meshDescriptor.meshFunction = meshFunc
+            meshDescriptor.objectFunction = objectFunc
+            meshDescriptor.fragmentFunction = fragFunc
+            terrainMeshPipeline = try? device.makeRenderPipelineState(descriptor: meshDescriptor, options: []).0
+        }
+        
+        // Pedagogical Bridge Pipeline (Mesh only)
+        let bridgeDescriptor = MTLMeshRenderPipelineDescriptor()
+        bridgeDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        bridgeDescriptor.depthAttachmentPixelFormat = .depth32Float
+        
+        if let bridgeMeshFunc = library.makeFunction(name: "topological_bridge_mesh"),
+           let bridgeFragFunc = library.makeFunction(name: "topological_bridge_fragment") {
+            bridgeDescriptor.meshFunction = bridgeMeshFunc
+            bridgeDescriptor.fragmentFunction = bridgeFragFunc
+            bridgeMeshPipeline = try? device.makeRenderPipelineState(descriptor: bridgeDescriptor, options: []).0
+        }
+        
+        // Volumetric rendering (Fog Overlay)
         let renderDescriptor = MTLRenderPipelineDescriptor()
         renderDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        renderDescriptor.colorAttachments[0].isBlendingEnabled = true
+        renderDescriptor.colorAttachments[0].sourceRGBBlendFactor = .one
+        renderDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         renderDescriptor.depthAttachmentPixelFormat = .depth32Float
         
         if let vertFunc = library.makeFunction(name: "terrain_vertex"),
@@ -127,21 +170,53 @@ public class HDTEPipeline {
         renderPassDescriptor.depthAttachment.clearDepth = 1.0
         renderPassDescriptor.depthAttachment.storeAction = .dontCare // Memoryless!
         
-        // Pass 3: Volumetric Rendering
-        if let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor),
-           let volumetricPSO = volumetricPipeline {
-            renderEncoder.setRenderPipelineState(volumetricPSO)
-            renderEncoder.setFragmentTexture(varianceTexture, index: 1)
+        // Pass 3: Geometry Rendering (Terrain + Bridges)
+        if let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
             
-            // Draw full-screen quad for raymarching
-            renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+            // 3.1: Terrain Mesh Shader
+            if let terrainPSO = terrainMeshPipeline {
+                renderEncoder.setRenderPipelineState(terrainPSO)
+                renderEncoder.setObjectBuffer(computeBuffers[0], offset: 0, index: 0) // Meshlets/Positions
+                // Dispatch object shader grid (e.g. 10x10 meshlets)
+                let grid = MTLSize(width: 10, height: 10, depth: 1)
+                let threadsPerThreadgroup = MTLSize(width: 1, height: 1, depth: 1)
+                renderEncoder.drawMeshThreadgroups(grid, threadsPerObjectThreadgroup: threadsPerThreadgroup, threadsPerMeshThreadgroup: threadsPerThreadgroup)
+            }
+            
+            // 3.2: Pedagogical Bridges
+            if let bridgePSO = bridgeMeshPipeline {
+                renderEncoder.setRenderPipelineState(bridgePSO)
+                renderEncoder.setMeshBuffer(computeBuffers[0], offset: 0, index: 0) // Clusters
+                // Dispatch 1 threadgroup per potential connection
+                let grid = MTLSize(width: 100, height: 1, depth: 1) // Simplified
+                let threadsPerThreadgroup = MTLSize(width: 32, height: 1, depth: 1)
+                renderEncoder.drawMeshThreadgroups(grid, threadsPerObjectThreadgroup: MTLSize(width: 1, height: 1, depth: 1), threadsPerMeshThreadgroup: threadsPerThreadgroup)
+            }
+            
+            // 3.3: Volumetric Fog Overlay
+            if let volumetricPSO = volumetricPipeline {
+                renderEncoder.setRenderPipelineState(volumetricPSO)
+                renderEncoder.setFragmentTexture(varianceTexture, index: 1)
+                // Draw full-screen quad
+                renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+            }
+            
             renderEncoder.endEncoding()
         }
         
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         
-        // Report memory usage
+        
+    }
+    
+    public func reportMemory() {
         memoryManager.reportMemoryUsage()
     }
+}
+
+public enum PipelineError: Error {
+    case commandQueueCreationFailed
+    case libraryLoadingFailed
+    case pipelineStateCreationFailed
 }

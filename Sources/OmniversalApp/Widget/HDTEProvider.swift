@@ -2,83 +2,83 @@ import WidgetKit
 import SwiftUI
 import Metal
 import simd
+import AppIntents
 import OmniCoordinator
 
 struct HDTEEntry: TimelineEntry {
     let date: Date
     let snapshot: CGImage
-    let configuration: HDTEConfiguration
+    let configuration: ConfigureHDTEIntent
 }
 
-struct HDTEConfiguration {
-    var dataSource: DataSourceType = .live
-    var visualStyle: VisualStyle = .volumetric
-    var updateInterval: TimeInterval = 300 // 5 minutes
+struct HDTEProvider: AppIntentTimelineProvider {
+    private let device: MTLDevice
+    private let pipeline: HDTEPipeline
     
-    enum DataSourceType {
-        case live, cached, demo
+    init() {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            fatalError("Metal is not supported on this device")
+        }
+        self.device = device
+        
+        do {
+            self.pipeline = try HDTEPipeline(device: device)
+        } catch {
+            print("Failed to initialize HDTE Pipeline: \(error)")
+            // Fallback strategy or fatal error depending on strictness
+            // For a widget, we might want a fallback static renderer, but for now we crash if core engine fails
+            fatalError("HDTE Pipeline initialization failed: \(error)")
+        }
     }
     
-    enum VisualStyle {
-        case volumetric, wireframe, solid
-    }
-}
-
-struct HDTEProvider: TimelineProvider {
-    private let device = MTLCreateSystemDefaultDevice()!
-    private lazy var pipeline = HDTEPipeline(device: device)
-    
-    // MARK: - TimelineProvider Protocol
+    // MARK: - AppIntentTimelineProvider Protocol
     
     func placeholder(in context: Context) -> HDTEEntry {
         // Static placeholder for widget gallery
-        let snapshot = generateSnapshot(config: HDTEConfiguration(), size: context.displaySize)
-        return HDTEEntry(date: Date(), snapshot: snapshot, configuration: HDTEConfiguration())
-    }
-    
-    func getSnapshot(in context: Context, completion: @escaping (HDTEEntry) -> Void) {
-        // Quick snapshot for widget preview
-        let config = HDTEConfiguration()
+        let config = ConfigureHDTEIntent()
         let snapshot = generateSnapshot(config: config, size: context.displaySize)
-        let entry = HDTEEntry(date: Date(), snapshot: snapshot, configuration: config)
-        completion(entry)
+        return HDTEEntry(date: Date(), snapshot: snapshot, configuration: config)
     }
     
-    func getTimeline(in context: Context, completion: @escaping (Timeline<HDTEEntry>) -> Void) {
+    func snapshot(for configuration: ConfigureHDTEIntent, in context: Context) async -> HDTEEntry {
+        // Quick snapshot for widget preview
+        let snapshot = generateSnapshot(config: configuration, size: context.displaySize)
+        return HDTEEntry(date: Date(), snapshot: snapshot, configuration: configuration)
+    }
+    
+    func timeline(for configuration: ConfigureHDTEIntent, in context: Context) async -> Timeline<HDTEEntry> {
         // Generate 12-hour timeline with 5-minute intervals
         var entries: [HDTEEntry] = []
         let currentDate = Date()
-        let config = HDTEConfiguration()
         
         // Generate 144 snapshots (12 hours * 12 per hour)
-        for offset in 0..<144 {
-            let entryDate = Calendar.current.date(byAdding: .minute, value: offset * 5, to: currentDate)!
+        // Note: In a real app, you might want to limit this to avoid timeout/memory issues
+        // For now, we generates a smaller batch for safety
+        for offset in 0..<12 { 
+            let entryDate = Calendar.current.date(byAdding: .minute, value: offset * 30, to: currentDate)!
             
             // Generate snapshot with time-varying data
             let snapshot = generateSnapshot(
-                config: config,
+                config: configuration,
                 size: context.displaySize,
-                timeOffset: Double(offset) * 5.0
+                timeOffset: Double(offset) * 30.0
             )
             
             entries.append(HDTEEntry(
                 date: entryDate,
                 snapshot: snapshot,
-                configuration: config
+                configuration: configuration
             ))
         }
         
-        // Timeline refreshes after 12 hours
-        let refreshDate = Calendar.current.date(byAdding: .hour, value: 12, to: currentDate)!
-        let timeline = Timeline(entries: entries, policy: .after(refreshDate))
-        
-        completion(timeline)
+        // Timeline refreshes after the last entry
+        return Timeline(entries: entries, policy: .atEnd)
     }
     
     // MARK: - Snapshot Generation
     
-    private func generateSnapshot(
-        config: HDTEConfiguration,
+    func generateSnapshot(
+        config: ConfigureHDTEIntent,
         size: CGSize,
         timeOffset: Double = 0.0
     ) -> CGImage {
@@ -93,6 +93,11 @@ struct HDTEProvider: TimelineProvider {
             mipmapped: false
         )
         textureDescriptor.usage = [.renderTarget, .shaderRead]
+        #if canImport(UIKit)
+        textureDescriptor.storageMode = .shared 
+        #else
+        textureDescriptor.storageMode = .managed
+        #endif
         
         guard let outputTexture = device.makeTexture(descriptor: textureDescriptor) else {
             fatalError("Failed to create output texture")

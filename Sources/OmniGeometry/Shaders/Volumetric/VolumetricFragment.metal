@@ -14,13 +14,36 @@ float terrainSDF(float3 p, texture2d<float, access::sample> heightmap, sampler s
     return p.y - height; // Distance to surface
 }
 
-// Volumetric fog density based on variance
-float fogDensity(float3 p, texture2d<float, access::sample> variance, sampler s) {
+// Enhanced Volumetric Fog: Pedagogical Uncertainty Visualization
+// Blue map = Aleatoric Uncertainty (Data noise)
+// Red map = Epistemic Uncertainty (Model ignorance)
+
+struct UncertaintyData {
+    float aleatoric; // Known unknowns (noise)
+    float epistemic; // Unknown unknowns (lack of data)
+};
+
+// Fog density based on variance type
+UncertaintyData sampleUncertainty(float3 p, texture2d<float, access::sample> variance, sampler s) {
     float2 uv = (p.xz / 100.0) + 0.5;
-    float sigma = variance.sample(s, uv).g; // Variance in green channel
+    float4 data = variance.sample(s, uv);
     
-    // Fog is thicker where uncertainty is high
-    return sigma * exp(-abs(p.y) * 0.1);
+    // Green channel = Total Variance (Legacy)
+    // Red channel = Epistemic (New)
+    // Blue channel = Aleatoric (New)
+    // Fallback: splitting total variance if discrete channels unavailable
+    
+    float total_sigma = data.g;
+    
+    // Pedagogical split (simulated for now, would come from Bayesian decomposition)
+    // High variance in low density areas -> Epistemic
+    // High variance in high density areas -> Aleatoric
+    
+    float height = p.y;
+    float epistemic = total_sigma * smoothstep(0.0, 5.0, abs(height - 10.0)); // Far from mean
+    float aleatoric = total_sigma * (1.0 - smoothstep(0.0, 5.0, abs(height - 10.0)));
+    
+    return { aleatoric, epistemic };
 }
 
 fragment float4 volumetric_fragment(
@@ -51,19 +74,35 @@ fragment float4 volumetric_fragment(
         float dist = terrainSDF(p, heightmap, s);
         
         // If we're near the surface, accumulate fog
-        if (abs(dist) < 2.0) {
-            float density = fogDensity(p, variance, s);
+        if (abs(dist) < 5.0) { // Increased volume
+            UncertaintyData unc = sampleUncertainty(p, variance, s);
+            float total_density = (unc.aleatoric + unc.epistemic);
             
-            // Accumulate color (blue-white gradient based on height)
-            float heightFactor = (p.y + 5.0) / 10.0;
-            float3 fogColor = mix(float3(0.2, 0.4, 0.8), float3(1.0, 1.0, 1.0), heightFactor);
-            
-            // Beer-Lambert law for absorption
-            float absorption = exp(-density * stepSize);
-            color += fogColor * density * (1.0 - alpha) * stepSize;
-            alpha += (1.0 - alpha) * (1.0 - absorption);
-            
-            if (alpha > 0.99) break; // Early exit
+            if (total_density > 0.01) {
+                // Color Coding:
+                // Aleatoric (Data Noise) -> Cool Blue/Cyan
+                // Epistemic (Model Ignorance) -> Warn Red/Orange
+                
+                float3 aleatoricColor = float3(0.1, 0.4, 0.9); // Cyan-Blue
+                float3 epistemicColor = float3(0.9, 0.2, 0.1); // Red-Orange
+                
+                // Mix based on ratio
+                float ratio = unc.epistemic / (total_density + 0.001);
+                float3 fogColor = mix(aleatoricColor, epistemicColor, ratio);
+                
+                // Height gradient integration
+                float heightFactor = (p.y + 5.0) / 10.0;
+                fogColor = mix(fogColor, float3(1.0), heightFactor * 0.3); // Whitish tops
+                
+                // Beer-Lambert law
+                float density = total_density * exp(-abs(p.y) * 0.1);
+                float absorption = exp(-density * stepSize);
+                
+                color += fogColor * density * (1.0 - alpha) * stepSize;
+                alpha += (1.0 - alpha) * (1.0 - absorption);
+                
+                if (alpha > 0.99) break; // Early exit
+            }
         }
         
         // Stop if we hit the surface

@@ -4,7 +4,8 @@ import PackageDescription
 let package = Package(
     name: "OmniversalEngine",
     platforms: [
-        .macOS(.v14) // Requires Metal 3
+        .macOS(.v14),
+        .iOS(.v17)
     ],
     products: [
         .executable(name: "OmniversalApp", targets: ["OmniversalApp"]),
