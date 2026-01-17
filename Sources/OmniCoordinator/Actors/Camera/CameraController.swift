@@ -42,6 +42,18 @@ public actor CameraController {
         
         return projMatrix * viewMatrix
     }
+
+    public func viewMatrix() -> simd_float4x4 {
+        let eye = simd_float3(
+            distance * cos(elevation) * cos(azimuth),
+            distance * sin(elevation),
+            distance * cos(elevation) * sin(azimuth)
+        )
+        let center = simd_float3(0, 0, 0)
+        let up = simd_float3(0, 1, 0)
+        
+        return createLookAt(eye: eye, center: center, up: up)
+    }
     
     private func createLookAt(eye: simd_float3, center: simd_float3, up: simd_float3) -> simd_float4x4 {
         let z = normalize(eye - center)
