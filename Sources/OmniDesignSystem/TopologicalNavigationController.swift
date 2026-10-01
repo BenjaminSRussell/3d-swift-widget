@@ -13,9 +13,12 @@ public final class TopologicalNavigationController {
     public var cameraTarget: SIMD3<Float> = SIMD3<Float>(0, 0, 0)
     public var parallaxOffset: SIMD2<Float> = .zero
     public var isSnapping: Bool = false
-    
+    private var currentPitch: Float = 0.0 // Track vertical rotation angle
+
     // Configuration
     public var snapThreshold: Float = 0.5
+    private let maxPitchAngle: Float = 85.0 * .pi / 180.0 // ±85° in radians
+    private let minPitchAngle: Float = -85.0 * .pi / 180.0
     
     public init(topologyEngine: HDTEPersistentHomology) {
         self.topologyEngine = topologyEngine
@@ -25,43 +28,50 @@ public final class TopologicalNavigationController {
     
     /// Updates camera position based on a drag gesture, integrating topological snapping.
     public func handleDrag(delta: SIMD2<Float>, inViewportSize size: SIMD2<Float>) {
-        // Simple orbital rotation
-        // In a real implementation, this would update rotation angles (azimuth/elevation)
-        
+        // Simple orbital rotation with pitch clamping
+        // Updates rotation angles (azimuth via rotationX, elevation via rotationY)
+
         let sensitivity: Float = 0.01
         let rotationX = delta.x * sensitivity
         let rotationY = delta.y * sensitivity
-        
+
         // Update camera position based on rotation around target
         // Basic orbital camera math
         let currentOffset = cameraPosition - cameraTarget
-        
-        // Rotate around Y axis (horizontal drag)
+
+        // Rotate around Y axis (horizontal drag / azimuth)
         let rotationMatrixY = float4x4(rotationY: -rotationX) // Drag left = rotate camera right (clockwise)
         let rotatedVec = rotationMatrixY * SIMD4<Float>(currentOffset.x, currentOffset.y, currentOffset.z, 1.0)
-        let newOffset = SIMD3<Float>(rotatedVec.x, rotatedVec.y, rotatedVec.z)
-        
-        // Rotate around X axis (vertical drag) - Limit elevation
-        let axis = cross(newOffset, SIMD3<Float>(0, 1, 0))
-        if length(axis) > 0.001 {
-             // Create rotation around the computed side axis
-             // Note: A full implementation would use quaternions to avoid gimbal lock
-             // but this suffices for a simple orbital cam.
-             // We skip vertical rotation in this basic snippet to keep it stable without full quaternion class,
-             // or we can just apply it if we had a helper. 
-             // To silence warning, we just use rotationY in a dummy way or logic:
-             let _ = rotationY
-        }
-        
+        var newOffset = SIMD3<Float>(rotatedVec.x, rotatedVec.y, rotatedVec.z)
+
+        // Apply pitch rotation around X axis (vertical drag / elevation) with clamping
+        // Update and clamp the pitch angle
+        currentPitch += rotationY
+        currentPitch = max(minPitchAngle, min(maxPitchAngle, currentPitch))
+
+        // Create rotation matrix for pitch (rotation around X axis)
+        let pitchMatrix = float4x4(rotationX: currentPitch)
+        let pitchedVec = pitchMatrix * SIMD4<Float>(newOffset.x, newOffset.y, newOffset.z, 1.0)
+        newOffset = SIMD3<Float>(pitchedVec.x, pitchedVec.y, pitchedVec.z)
+
         cameraPosition = cameraTarget + newOffset
     }
     
-    // Helper for rotation matrix
+    // Helper for rotation matrices
     private func float4x4(rotationY angle: Float) -> simd_float4x4 {
         return simd_float4x4(
             SIMD4<Float>(cos(angle), 0, sin(angle), 0),
             SIMD4<Float>(0, 1, 0, 0),
             SIMD4<Float>(-sin(angle), 0, cos(angle), 0),
+            SIMD4<Float>(0, 0, 0, 1)
+        )
+    }
+
+    private func float4x4(rotationX angle: Float) -> simd_float4x4 {
+        return simd_float4x4(
+            SIMD4<Float>(1, 0, 0, 0),
+            SIMD4<Float>(0, cos(angle), -sin(angle), 0),
+            SIMD4<Float>(0, sin(angle), cos(angle), 0),
             SIMD4<Float>(0, 0, 0, 1)
         )
     }

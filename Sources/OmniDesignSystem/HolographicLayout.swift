@@ -48,9 +48,23 @@ public struct HolographicView<Content: View>: View {
     
     #if os(macOS)
     private func updateCameraRotation(location: CGPoint) {
-        // Calculate rotation based on mouse position
-        // This will be passed to Metal shader to rotate the camera matrix
-        // NOT the SwiftUI view itself
+        // Normalize pointer coordinates to (-1...1) range for camera rotation
+        guard let screen = NSScreen.main else { return }
+        let screenFrame = screen.visibleFrame
+
+        // Normalize location relative to screen center
+        let centerX = screenFrame.midX
+        let centerY = screenFrame.midY
+        let normalizedX = Float((location.x - centerX) / centerX)
+        let normalizedY = Float((location.y - centerY) / centerY)
+
+        // Clamp to reasonable range and apply intensity
+        let clampedX = Float(max(-1.0, min(1.0, normalizedX)))
+        let clampedY = Float(max(-1.0, min(1.0, normalizedY)))
+
+        withAnimation(.interactiveSpring()) {
+            cameraRotation = SIMD2<Float>(clampedX * Float(intensity), -clampedY * Float(intensity))
+        }
     }
     #endif
     
