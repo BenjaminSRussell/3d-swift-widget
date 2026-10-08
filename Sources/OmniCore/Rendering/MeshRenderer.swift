@@ -28,15 +28,15 @@ public final class MeshRenderer {
         
         // Fallback for older OS / SDK (Standard Vertex/Fragment)
         let desc = MTLRenderPipelineDescriptor()
-        desc.vertexFunction = library.makeFunction(name: "vertex_main")
-        desc.fragmentFunction = library.makeFunction(name: "fragment_main")
+        desc.vertexFunction = shaders.makeFunction(name: "vertex_main")
+        desc.fragmentFunction = shaders.makeFunction(name: "fragment_main")
         desc.colorAttachments[0].pixelFormat = .bgra8Unorm
         desc.colorAttachments[1].pixelFormat = .rgba16Float
         desc.depthAttachmentPixelFormat = .depth32Float
         self.pipelineState = try device.makeRenderPipelineState(descriptor: desc, options: [], reflection: nil)
         
         // Phase 3.2: Composite Output
-        guard let compFunc = library.makeFunction(name: "composite_main") else {
+        guard let compFunc = shaders.makeFunction(name: "composite_main") else {
             throw NSError(domain: "OmniCore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Composite kernel missing"])
         }
         self.compositeState = try device.makeComputePipelineState(function: compFunc)
