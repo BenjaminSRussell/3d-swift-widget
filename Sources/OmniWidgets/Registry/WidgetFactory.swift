@@ -11,6 +11,7 @@ public enum WidgetDataType {
     case topography // High-Frequency Grid
     case fluid      // Navier-Stokes
     case volumetric // Cloud/Voxels
+    case dataset(DatasetBuffer) // OmniData CSV/JSON → point cloud
 }
 
 public enum WidgetStyle {
@@ -36,6 +37,8 @@ public final class StandardWidgetFactory: HDTEWidgetFactory {
             return AnyView(Text("Fluid Widget Placeholder")) // To be implemented
         case .volumetric:
             return AnyView(Text("Volumetric Widget Placeholder")) // To be implemented
+        case .dataset(let buffer):
+            return AnyView(DatasetScatterWidget(buffer: buffer, style: style))
         }
     }
 }

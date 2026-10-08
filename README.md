@@ -36,7 +36,7 @@ Every directory under `Sources/` is a declared target. Retired trees live in [`a
 | **`OmniKit`** | `Sources/OmniKit` | Middleware: themes and render orchestration | `OmniCore`, `OmniCoreTypes`, `OmniGeometry`, `OmniMath` |
 | **`OmniUI`** | `Sources/OmniUI` | Front-end design layer | `OmniCore`, `OmniKit` |
 | **`OmniDesignSystem`** | `Sources/OmniDesignSystem` | Legacy alias of `OmniUI`, plus materials | `OmniUI` |
-| **`OmniData`** | `Sources/OmniData` | Data layer: transfer functions and loaders | `OmniCore` |
+| **`OmniData`** | `Sources/OmniData` | Data layer: transfer functions, CSV/TSV/JSON loaders, `DatasetBuffer` (see [Data schema](#data-schema-omnidata)) | `OmniCore` |
 | **`OmniWidgets`** | `Sources/OmniWidgets` | Widget implementations and registry | `OmniCore`, `OmniUI`, `OmniKit`, `OmniDesignSystem`, `OmniData`, `OmniStochastic` |
 | **`OmniCoordinator`** | `Sources/OmniCoordinator` | HDTE pipeline: wires compute, render and widgets together | all of the above |
 | **`OmniversalApp`** (executable) | `Sources/OmniversalApp` | Demo app | (see #3) |
@@ -64,6 +64,32 @@ OmniCoreTypes ─▶ OmniCore ─┬─▶ OmniMath ───────┐
 
 `OmniWidgets` is the canonical widget module. `OmniWidgetry` was an earlier copy and is archived.
 `OmniDesignSystem` is kept as a thin alias of `OmniUI` for source compatibility.
+
+## Data schema (OmniData)
+
+`OmniData` turns tabular files into GPU vertex buffers for the widgets:
+
+```swift
+import OmniData
+let buffer = try DatasetBuffer(contentsOf: url,                       // .csv, .tsv or .json
+                               mapping: VertexMapping(x: "lon", y: "lat", z: "elevation_m", value: "temp_c"))
+StandardWidgetFactory.shared.makeWidget(for: .dataset(buffer), style: .glass)   // DatasetScatterWidget
+```
+
+Input expectations:
+
+| Format | Layout |
+| --- | --- |
+| CSV / TSV | The first row is a header with unique column names. Fields follow RFC 4180: they can be quoted with `"`, quotes inside a quoted field are doubled (`""`), and quoted fields can span lines. CRLF or LF line endings are both fine, and a UTF-8 BOM is allowed. Every row needs the same number of fields. Blank lines are skipped. |
+| JSON | Either an array of flat objects, `[{"lon": -72.1, "lat": 41.8, ...}, ...]`, or a table, `{"columns": ["lon", "lat"], "rows": [[-72.1, 41.8], ...]}`. Missing keys and `null` become empty cells. Booleans stay text. |
+
+- **Column types are inferred.** A column is numeric (`Float`) when every non-empty cell parses as a number. Empty cells in a numeric column become `NaN`. Any other column is kept as text.
+- **Mapping.** `VertexMapping` picks numeric columns for `x`, `y`, optional `z` (height) and optional `value`. Each row becomes one `SIMD4<Float>`: `xyz` is the position, normalised to `[-1, 1]`, and `w` is the value, normalised to `[0, 1]`. Without a `value` column, `w = 1`. Pass `normalize: false` to keep raw units.
+- **Rows with `NaN` in any mapped column are dropped.** A text or missing column throws `DatasetError.nonNumericColumn` or `.missingColumn`.
+- **`DatasetBuffer`** keeps the vertices on the CPU (for Canvas widgets) and in a shared-storage `MTLBuffer` (`buffer`, with a stride of `DatasetBuffer.stride`) for Metal passes.
+
+Sample fixtures are in `Tests/OmniDataTests/Fixtures/` (`elevation_sample.csv` / `.json`). Parquet
+and a dataset cache are not supported yet.
 
 ## Shaders
 
