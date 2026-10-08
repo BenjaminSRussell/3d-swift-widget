@@ -62,6 +62,11 @@ public final class ShaderBundle {
         fatalError("Metal Library not found and runtime compilation failed.")
     }
     
+    /// Returns the first loaded library that defines `name`.
+    public func library(containing name: String) -> MTLLibrary? {
+        libraries.first { $0.functionNames.contains(name) }
+    }
+
     /// Returns a function from the shader library.
     public func makeFunction(name: String) -> MTLFunction? {
         for lib in libraries {

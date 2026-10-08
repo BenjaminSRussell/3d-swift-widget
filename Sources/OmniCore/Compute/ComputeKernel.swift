@@ -14,9 +14,12 @@ public class ComputeKernel {
     public init(functionName: String, constants: MTLFunctionConstantValues? = nil) throws {
         self.device = GPUContext.shared.device
         
-        // Use unified ShaderBundle (Handles native Metal compilation and fallbacks)
-        let library = ShaderBundle.shared.metalLibrary
-        
+        // Search every loaded library: pre-compiled bundles and runtime-compiled sources are
+        // split per target/file, so the kernel is not necessarily in the first one.
+        guard let library = ShaderBundle.shared.library(containing: functionName) else {
+            throw NSError(domain: "OmniCore", code: 404, userInfo: [NSLocalizedDescriptionKey: "Function \(functionName) not found in library"])
+        }
+
         // Load function
         let function: MTLFunction
         if let constants = constants {
@@ -27,7 +30,7 @@ public class ComputeKernel {
             }
             function = fn
         }
-        
+
         self.pipelineState = try device.makeComputePipelineState(function: function)
     }
     

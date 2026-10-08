@@ -11,12 +11,11 @@ public final class MeshRenderer {
         let descriptor = MTLMeshRenderPipelineDescriptor()
         
         // Load shaders using robust ShaderBundle
-        let library = ShaderBundle.shared.metalLibrary
-
-        
-        descriptor.objectFunction = library.makeFunction(name: "object_cull")
-        descriptor.meshFunction = library.makeFunction(name: "mesh_main")
-        descriptor.fragmentFunction = library.makeFunction(name: "fragment_main")
+        // Functions may live in different libraries (one per runtime-compiled file).
+        let shaders = ShaderBundle.shared
+        descriptor.objectFunction = shaders.makeFunction(name: "object_cull")
+        descriptor.meshFunction = shaders.makeFunction(name: "mesh_main")
+        descriptor.fragmentFunction = shaders.makeFunction(name: "fragment_main")
         
         // Phase 3.2: MRT Setup
         descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
