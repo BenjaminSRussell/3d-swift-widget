@@ -1,6 +1,7 @@
 import XCTest
 import Metal
 @testable import OmniCore
+import OmniStochastic
 
 /// GPU performance smoke tests. Skipped when no Metal device is available
 /// (e.g. headless CI without a paravirtualized GPU).
