@@ -1,6 +1,6 @@
 #include <metal_stdlib>
-#include "../../Include/OmniShaderTypes.h"
-#include "../../Shared/OmniMath.metal"
+#include "../Include/OmniShaderTypes.h"
+#include "../Shared/OmniMath.metal"
 
 using namespace metal;
 

@@ -140,7 +140,7 @@ let package = Package(
         // MARK: - Tests
         .testTarget(
             name: "OmniCoreTests",
-            dependencies: ["OmniCore"],
+            dependencies: ["OmniCore", "OmniStochastic"],
             path: "Tests/OmniCoreTests"
         ),
         .testTarget(

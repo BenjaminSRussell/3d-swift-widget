@@ -64,7 +64,7 @@ void mesh_main(const object_data Meshlet &meshlet [[payload]],
                device const float3 *vertices [[buffer(0)]],
                uint tid [[thread_index_in_threadgroup]],
                uint3 mesh_grid_pos [[threadgroup_position_in_grid]],
-               mesh_output<MeshletOutput, uint3, 64, 126> output) {
+               metal::mesh<MeshletOutput, void, 64, 126, metal::topology::triangle> output) {
     
     // Set primitive count
     if (tid == 0) {

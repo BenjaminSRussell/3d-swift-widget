@@ -1,4 +1,6 @@
-// #pragma once removed
+// Include guard: this file is #included by several shaders (and compiled on its own)
+#ifndef OMNI_MATH_METAL
+#define OMNI_MATH_METAL
 #include <metal_stdlib>
 using namespace metal;
 
@@ -39,3 +41,5 @@ inline void atomic_add_float(device atomic_uint* address, float value) {
         }
     }
 }
+
+#endif // OMNI_MATH_METAL
