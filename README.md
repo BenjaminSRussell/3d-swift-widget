@@ -17,10 +17,40 @@ modules, SwiftUI design-system pieces, and WidgetKit widgets. The package is nam
 ./compile_shaders.sh      # compile every Sources/**/*.metal file to AIR; fails on any shader error
 swift build
 swift test
-swift run OmniversalApp   # demo app executable
+swift run OmniversalApp   # demo app (see "Running the demo app")
 ```
 
 CI (`.github/workflows/ci.yml`) runs these same steps on macOS for every PR.
+
+## Running the demo app
+
+`swift run OmniversalApp` opens a window on macOS 14 or later, with two scenes:
+
+- **Dataset (Metal)**: the bundled `Sources/OmniversalApp/Resources/sample_terrain.csv` (576 rows) is
+  loaded through `OmniData` and drawn as a rotating point cloud by `DatasetPointRenderer`. Position is
+  `x_km`/`y_km`/`elevation_m`, and colour and size come from `rainfall_mm`. The shader is compiled from
+  source at runtime, so the demo doesn't depend on the prebuilt metallib.
+- **Grid (RealityKit)**: the original RealityKit grid view.
+
+The app links `OmniCore`, `OmniUI`, `OmniKit`, `OmniCoordinator`, `OmniWidgets` and `OmniData`.
+You can also open `Package.swift` in Xcode and run the `OmniversalApp` scheme.
+
+### GPU loss and fallback
+
+`GPUHealthMonitor` (OmniWidgets) owns the `MTLDevice`. It listens for failures from three sources:
+
+- **Command-buffer errors.** The renderer reports any failed frame: device removed, timeout, out of memory, and so on.
+- **Device removal on macOS.** `MTLCopyAllDevicesWithObserver` reports `wasRemoved` / `removalRequested`, for example an eGPU unplug or a driver reset.
+- **Manual or simulated loss.** Use the scene's **Debug** menu, `simulateDeviceLoss()`, or `retry()`.
+
+On a failure, the monitor tries up to 3 times to get a new device. If one succeeds, `generation` increments.
+`ResilientDatasetScene` keys its `MTKView` on `generation`, so the view, queue and pipeline are rebuilt,
+and the app reloads the dataset buffer on the new device. If every attempt fails, or there is no GPU at
+all, the scene switches to the Canvas renderer (`DatasetScatterWidget`). An orange banner then gives the
+reason and offers **Retry**, so the view never goes silently black. Failures and recoveries are logged
+to `os.Logger` (subsystem `HDTE.OmniWidgets`, category `gpu`) and kept in `monitor.events`.
+`DeviceLossTests` covers recovery, permanent loss with the banner, retry, a provider that fails twice
+and then recovers, and a non-blank offscreen frame before and after recovery.
 
 ## Package map
 

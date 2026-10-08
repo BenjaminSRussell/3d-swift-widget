@@ -128,13 +128,15 @@ let package = Package(
         .executableTarget(
             name: "OmniversalApp",
             dependencies: [
-                // "OmniCore", // Disabled to fix Metal build errors
-                // "OmniUI",
-                // "OmniKit",
-                // "OmniCoordinator",
-                // "OmniWidgets"
+                "OmniCore",
+                "OmniUI",
+                "OmniKit",
+                "OmniCoordinator",
+                "OmniWidgets",
+                "OmniData"
             ],
-            path: "Sources/OmniversalApp"
+            path: "Sources/OmniversalApp",
+            resources: [.copy("Resources")]
         ),
         
         // MARK: - Tests
