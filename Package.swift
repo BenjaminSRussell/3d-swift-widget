@@ -147,6 +147,12 @@ let package = Package(
             name: "OmniDesignSystemTests",
             dependencies: ["OmniUI", "OmniCore"],
             path: "Tests/OmniUITests"
+        ),
+        .testTarget(
+            name: "OmniDataTests",
+            dependencies: ["OmniData", "OmniWidgets"],
+            path: "Tests/OmniDataTests",
+            resources: [.copy("Fixtures")]
         )
     ]
 )

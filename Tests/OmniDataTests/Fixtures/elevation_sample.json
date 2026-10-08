@@ -1,0 +1,4 @@
+{"columns": ["station", "lon", "lat", "elevation_m"],
+ "rows": [["Summit, North", -72.10, 41.80, 512.5],
+          ["Ridge", -72.05, 41.82, 430.0],
+          ["Valley", -72.00, 41.78, 120.25]]}
