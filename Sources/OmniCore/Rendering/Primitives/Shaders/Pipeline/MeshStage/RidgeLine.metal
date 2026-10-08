@@ -1,6 +1,6 @@
 #include <metal_stdlib>
-#include "../../Include/OmniShaderTypes.h"
-#include "OmniMath.metal"
+#include "../../../../../Include/OmniShaderTypes.h"
+#include "../../../../Shaders/Shared/OmniMath.metal"
 using namespace metal;
 
 struct Payload {

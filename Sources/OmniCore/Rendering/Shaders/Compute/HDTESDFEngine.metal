@@ -1,5 +1,5 @@
 #include <metal_stdlib>
-#include "../../Include/OmniShaderTypes.h"
+#include "../Include/OmniShaderTypes.h"
 
 using namespace metal;
 
