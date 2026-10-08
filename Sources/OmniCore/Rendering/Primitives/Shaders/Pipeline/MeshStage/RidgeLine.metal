@@ -1,7 +1,7 @@
 #include <metal_stdlib>
+using namespace metal;  // before the shared header, which uses unqualified texture2d/sampler
 #include "../../../../../Include/OmniShaderTypes.h"
 #include "../../../../Shaders/Shared/OmniMath.metal"
-using namespace metal;
 
 struct Payload {
     uint meshletID;
