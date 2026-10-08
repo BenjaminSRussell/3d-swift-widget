@@ -15,7 +15,7 @@ final class HDTEPerformanceTests: XCTestCase {
 
     func testParticleSystemAllocationPerformance() throws {
         let device = try requireDevice()
-        let particleCount = 100_000
+        let particleCount = 10_000 // stays well inside the 20 MB GlobalHeap
 
         measure(metrics: [XCTClockMetric()]) {
             let system = ParticleSystem(device: device, maxParticles: particleCount)
